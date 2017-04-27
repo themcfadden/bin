@@ -1,0 +1,11 @@
+#!/bin/bash
+
+DEST='//Main/Public/mmcfadden/RC'
+
+if [ -z "$1" ]
+then
+    echo "No file specificed."
+    exit $E_NOARGS
+fi
+
+cp -v $1 $DEST
