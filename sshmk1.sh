@@ -33,6 +33,34 @@ def setup_my_prefs(child):
 #            return child
     return None
 
+def screen_to_radio(child):
+    """"
+    After connecting via SSH, use screen to connect to the radio via uart
+    """
+
+    command_list = ['screen /dev/ttyHS3 115200', '', 'admin', 'teamteal']
+    cmd_error = 'try again'
+    for cmd in command_list:
+        #now we should be sending the password
+        child.sendline(cmd)
+        i = child.expect([pexpect.TIMEOUT, cmd_error, 'userDevice login:', 'admin', 'teamteal'])
+        if i == 0: #timeout
+            print('ERROR!')
+            print('PREF COMMAND FAILED:')
+            print(child.before, child.after)
+#            return None
+        if i == 1: #
+            print('Some Other Error! ('+ cmd  +')')
+            continue
+        if i == 2: # userDevice login
+            print('Screen started')
+            continue
+        if i == 3: '
+            
+        else:
+            print('What?')
+    return None
+
 def ssh_password(child, passwords):
     """
     Use expect to send passwords and process reponse
@@ -109,6 +137,7 @@ def ssh(user, host, passwords):
 
     child = ssh_password(child, passwords)
     setup_my_prefs(child)
+    screen_to_radio(child)
 
     return child
 
