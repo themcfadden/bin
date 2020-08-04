@@ -10,12 +10,15 @@ import time
 import traceback
 import pexpect
 
+MK1_PASSWORD = "oelinux123"
+
 def setup_my_prefs(child):
     """
     Use expect to send commands to set some prefs on the drone
     """
-    command_list = ['alias ls=\'ls -F\'']
+    command_list = ['alias ls=\'ls -F\'', "alias ll='ls -l'", "cd /usr/local/tealflasher/images"]
     cmd_error = 'try again'
+    did_something = False
     for cmd in command_list:
         #now we should be sending the password
         child.sendline(cmd)
@@ -24,13 +27,14 @@ def setup_my_prefs(child):
             print('ERROR!')
             print('PREF COMMAND FAILED:')
             print(child.before, child.after)
-#            return None
         if i == 1: #
             print('Some Other Error! ('+ cmd  +')')
             continue
-        if i == 2: #success
-            print('PREFS SET!')
-#            return child
+        if i > 1: #success
+            did_something = True
+
+    if did_something:
+        print('PREFS SET!')
     return None
 
 def screen_to_radio(child):
@@ -144,6 +148,7 @@ def ssh(user, host, passwords):
 def show_help():
     print("{} [opts] <host>".format("sshmk1.sh"))
     print("\t-h: Show help")
+    print("\t-i: Copy image to drone image dir")
     print("\t-r: connect to Microhard radio")
 
 def main(opts, args):
@@ -156,7 +161,8 @@ def main(opts, args):
     host = args[0]
 
     user = 'root'
-    passwords = ['oelinux123', 'pw2', 'pw3']
+    #passwords = ['oelinux123', 'pw2', 'pw3']
+    passwords = [MK1_PASSWORD, 'pw2', 'pw3']
     ssh_clearkey = 'ssh-keygen -f "' + os.path.expanduser("~") + \
         '/.ssh/known_hosts" -R ' + host + ' &>/dev/null'
 
@@ -164,23 +170,26 @@ def main(opts, args):
     # or same device with new keys
     os.system(ssh_clearkey)
 
+    if "-i" in opts:
+        image_file = args[1]
+        scp_image_to_drone(image_file, host)
+        sys.exit(0)
+
+
     # make connection
     child = ssh(user, host, passwords)
     if child is None:
         print('Could Not Login.')
         sys.exit(1)
 
-    if "-h" in opts:
-        show_help()
-        sys.exit(0)
 
     if "-r" in opts:
         screen_to_radio(child)
 
 
+
     # do some shell stuff then call interact to hook up stdout, err, in, etc. to the calling shell.
     child.setwinsize(int(lin), int(col))
-    #child.sendline('\n')
     child.interact()
 
 if __name__ == '__main__':
