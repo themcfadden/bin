@@ -12,6 +12,21 @@ import pexpect
 
 MK1_PASSWORD = "oelinux123"
 
+def cd_to_image_dir(child):
+    """"
+    CD to the image directory, a common need
+    """
+
+    child.sendline("cd /usr/local/tealflasher/images")
+
+    resp = child.expect([pexpect.TIMEOUT, '[#$]'])
+    if resp != 1:
+        print("Did not get to path")
+        print(child.before, child.after)
+        return None
+
+    return child
+
 def setup_my_prefs(child):
     """
     Use expect to send commands to set some prefs on the drone
@@ -37,34 +52,6 @@ def setup_my_prefs(child):
         print('PREFS SET!')
     return None
 
-def screen_to_radio(child):
-    """"
-    After connecting via SSH, use screen to connect to the radio via uart
-    """
-
-
-#    command_list = ['screen /dev/ttyHS3 115200', '', 'admin', 'teamteal']
-#    cmd_error = 'try again'
-#    for cmd in command_list:
-#        #now we should be sending the password
-#        child.sendline(cmd)
-#        i = child.expect([pexpect.TIMEOUT, cmd_error, 'userDevice login:', 'admin', 'teamteal'])
-#        if i == 0: #timeout
-#            print('ERROR!')
-#            print('PREF COMMAND FAILED:')
-#            print(child.before, child.after)
-##            return None
-#        if i == 1: #
-#            print('Some Other Error! ('+ cmd  +')')
-#            continue
-#        if i == 2: # userDevice login
-#            print('Screen started')
-#            continue
-#        if i == 3: '
-#            
-#        else:
-#            print('What?')
-#    return None
 
 def ssh_password(child, passwords):
     """
@@ -141,15 +128,8 @@ def ssh(user, host, passwords):
             break
 
     child = ssh_password(child, passwords)
-    setup_my_prefs(child)
 
     return child
-
-def show_help():
-    print("{} [opts] <host>".format("sshmk1.sh"))
-    print("\t-h: Show help")
-    print("\t-i: Copy image to drone image dir")
-    print("\t-r: connect to Microhard radio")
 
 def main(opts, args):
     """
@@ -170,27 +150,25 @@ def main(opts, args):
     # or same device with new keys
     os.system(ssh_clearkey)
 
-    if "-i" in opts:
-        image_file = args[1]
-        scp_image_to_drone(image_file, host)
-        sys.exit(0)
-
-
     # make connection
     child = ssh(user, host, passwords)
     if child is None:
         print('Could Not Login.')
         sys.exit(1)
 
+    setup_my_prefs(child)
 
-    if "-r" in opts:
-        screen_to_radio(child)
-
-
+    if "-i" in opts:
+        cd_to_image_dir(child)
 
     # do some shell stuff then call interact to hook up stdout, err, in, etc. to the calling shell.
     child.setwinsize(int(lin), int(col))
     child.interact()
+
+def show_help():
+    print("{} [opts] <host>".format("sshmk1.sh"))
+    print("\t-h: Show help")
+    print("\t-i: automatically move image dir")
 
 if __name__ == '__main__':
     try:
@@ -202,6 +180,7 @@ if __name__ == '__main__':
             sys.exit(1)
 
         main(opts, args)
+
     except(Exception) as e:
         print(str(e))
         traceback.print_exc()
