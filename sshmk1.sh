@@ -38,28 +38,29 @@ def screen_to_radio(child):
     After connecting via SSH, use screen to connect to the radio via uart
     """
 
-    command_list = ['screen /dev/ttyHS3 115200', '', 'admin', 'teamteal']
-    cmd_error = 'try again'
-    for cmd in command_list:
-        #now we should be sending the password
-        child.sendline(cmd)
-        i = child.expect([pexpect.TIMEOUT, cmd_error, 'userDevice login:', 'admin', 'teamteal'])
-        if i == 0: #timeout
-            print('ERROR!')
-            print('PREF COMMAND FAILED:')
-            print(child.before, child.after)
-#            return None
-        if i == 1: #
-            print('Some Other Error! ('+ cmd  +')')
-            continue
-        if i == 2: # userDevice login
-            print('Screen started')
-            continue
-        if i == 3: '
-            
-        else:
-            print('What?')
-    return None
+
+#    command_list = ['screen /dev/ttyHS3 115200', '', 'admin', 'teamteal']
+#    cmd_error = 'try again'
+#    for cmd in command_list:
+#        #now we should be sending the password
+#        child.sendline(cmd)
+#        i = child.expect([pexpect.TIMEOUT, cmd_error, 'userDevice login:', 'admin', 'teamteal'])
+#        if i == 0: #timeout
+#            print('ERROR!')
+#            print('PREF COMMAND FAILED:')
+#            print(child.before, child.after)
+##            return None
+#        if i == 1: #
+#            print('Some Other Error! ('+ cmd  +')')
+#            continue
+#        if i == 2: # userDevice login
+#            print('Screen started')
+#            continue
+#        if i == 3: '
+#            
+#        else:
+#            print('What?')
+#    return None
 
 def ssh_password(child, passwords):
     """
@@ -137,18 +138,23 @@ def ssh(user, host, passwords):
 
     child = ssh_password(child, passwords)
     setup_my_prefs(child)
-    screen_to_radio(child)
 
     return child
 
-def main():
+def show_help():
+    print("{} [opts] <host>".format("sshmk1.sh"))
+    print("\t-h: Show help")
+    print("\t-r: connect to Microhard radio")
+
+def main(opts, args):
     """
     Do the stuff
     """
     # vars
     lin, col = os.popen('stty size', 'r').read().split()
     # resize_command="COLUMNS=" + col + ";LINES=" + lin + ";export COLUMNS LINES;\n"
-    host = sys.argv[1]
+    host = args[0]
+
     user = 'root'
     passwords = ['oelinux123', 'pw2', 'pw3']
     ssh_clearkey = 'ssh-keygen -f "' + os.path.expanduser("~") + \
@@ -164,6 +170,14 @@ def main():
         print('Could Not Login.')
         sys.exit(1)
 
+    if "-h" in opts:
+        show_help()
+        sys.exit(0)
+
+    if "-r" in opts:
+        screen_to_radio(child)
+
+
     # do some shell stuff then call interact to hook up stdout, err, in, etc. to the calling shell.
     child.setwinsize(int(lin), int(col))
     #child.sendline('\n')
@@ -171,7 +185,14 @@ def main():
 
 if __name__ == '__main__':
     try:
-        main()
+        opts = [opt for opt in sys.argv[1:] if opt.startswith("-")]
+        args = [arg for arg in sys.argv[1:] if not arg.startswith("-")]
+
+        if len(args) < 1 or "-h" in opts:
+            show_help()
+            sys.exit(1)
+
+        main(opts, args)
     except(Exception) as e:
         print(str(e))
         traceback.print_exc()
