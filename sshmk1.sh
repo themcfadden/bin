@@ -25,13 +25,15 @@ def cd_to_image_dir(child):
         print(child.before, child.after)
         return None
 
+    print("CD to images dir.")
+
     return child
 
 def setup_my_prefs(child):
     """
     Use expect to send commands to set some prefs on the drone
     """
-    command_list = ['alias ls=\'ls -F\'', "alias ll='ls -l'", "cd /usr/local/tealflasher/images"]
+    command_list = ['alias ls=\'ls -F\'', "alias ll='ls -l'"]
     cmd_error = 'try again'
     did_something = False
     for cmd in command_list:
