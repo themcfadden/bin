@@ -16,8 +16,20 @@ def cd_to_image_dir(child):
     """"
     CD to the image directory, a common need
     """
+    image_dir = "/usr/local/tealflasher/images"
+    return cd_to_dir(child, image_dir)
 
-    child.sendline("cd /usr/local/tealflasher/images")
+def cd_to_dir(child, directory):
+    """"
+    CD to the specified directory, a common need
+    """
+
+    if len(directory) < 1:
+        print("Directory not specified");
+        return None
+
+    cmd = "cd " + directory
+    child.sendline(cmd)
 
     resp = child.expect([pexpect.TIMEOUT, '[#$]'])
     if resp != 1:
@@ -28,7 +40,7 @@ def cd_to_image_dir(child):
     print("CD to images dir.")
 
     return child
-
+    
 def setup_my_prefs(child):
     """
     Use expect to send commands to set some prefs on the drone
@@ -162,6 +174,12 @@ def main(opts, args):
 
     if "-i" in opts:
         cd_to_image_dir(child)
+
+    if "-d" in opts:
+        cd_to_dir(child, args[1])
+
+    if "-c" in opts:
+        child.sendline(args[1])
 
     # do some shell stuff then call interact to hook up stdout, err, in, etc. to the calling shell.
     child.setwinsize(int(lin), int(col))
