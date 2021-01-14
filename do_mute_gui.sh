@@ -68,53 +68,27 @@ function unmute()
 
 }
 
-# Init script vars
-PROGRAM_NAME=$(basename $0)
-DELAY_PERIOD=30
-POSITIONAL=()
-
-while [[ $# -gt 0 ]]
-      do
-          key="$1"
-
-          case $key in
-              -d|--delay)
-                  DELAY_PERIOD="$2"
-                  shift # past argument
-                  shift # past value
-                  ;;
-              -h|--help)
-                  usage; exit;
-                  shift # past argument
-                  shift # past value
-                  ;;
-              *)
-                  POSITIONAL+=("$1")
-                  shift # past argument
-                  ;;
-          esac
-done
-
-set -- "${POSITIONAL[@]}" # restore positional params
-
-if [[ "$1" ]]; then
-    DELAY_PERIOD=$1
-fi
-
-# Issue our mute command
-mute
-
-wait_period=0
+DELAY_PERIOD=60
 while true
 do
-    wait_period=$(($wait_period+1))
-    if [ $wait_period -gt $DELAY_PERIOD ]; then
-        break
-    else
-        sleep 1
-    fi
+      DELAY_PERIOD=$(zenity --entry --text=Mute Audio --entry-text=$DELAY_PERIOD)
+
+      if [[ -z "$DELAY_PERIOD" ]]; then break; fi
+
+      # Issue our mute command
+      mute
+
+      wait_period=0
+      while true
+      do
+          wait_period=$(($wait_period+1))
+          if [ $wait_period -gt $DELAY_PERIOD ]; then
+              break
+          else
+              sleep 1
+          fi
+      done
+
+      # Issue our unmute command
+      unmute
 done
-
-# Issue our unmute command
-unmute
-

@@ -14,7 +14,7 @@ MK1_PASSWORD = "oelinux123"
 
 def scp_password(child, passwords):
     """
-    Use expect to send passwords and process reponse
+    Use expect to send passwords and process response
     """
     ssh_pass_fail = 'try again.'
     for password in passwords:
@@ -31,10 +31,10 @@ def scp_password(child, passwords):
             print('Wrong Password! ('+ password +')')
             continue
         if i == 2: #success
-            print('FILE COPIED')
+            #print('FILE COPIED')
             return child
         if i == 3: #success
-            print('LOGGED IN')
+            #print('LOGGED IN')
             return child
     return None
 
@@ -113,7 +113,7 @@ def ssh_command(ssh_cmd_string, passwords):
     ssh_last_login = "Last login:"
     
     #ssh_command = ('/usr/bin/scp %s %s@%s:%s'%(image_file, user, host, destination))
-    print("ssh_cmd_str:", ssh_cmd_string)
+    #print("ssh_cmd_str:", ssh_cmd_string)
 
     child = pexpect.spawn(ssh_cmd_string)
 
@@ -155,7 +155,7 @@ def ssh_command(ssh_cmd_string, passwords):
             #print(child.before, child.after)
             sys.exit(-1)
         elif i == 6:
-            print('Got Password Request')
+            #print('Got Password Request')
             #print(child.before, child.after)
             break
 
@@ -188,7 +188,7 @@ def main(opts, args):
 
     # make connection
     scp(user, host, image_file_path, destination, passwords)
-    scp(user, host, '/home/mattmc/projects/prod/fmu_images/fmuf.sh', destination, passwords)
+    scp(user, host, '/home/mattmc/projects/util/fmuf.sh', destination, passwords)
 
     child = ssh(user, host, passwords)
     if child is None:

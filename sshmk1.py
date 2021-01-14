@@ -40,12 +40,13 @@ def cd_to_dir(child, directory):
     print("CD to images dir.")
 
     return child
-    
+
 def setup_my_prefs(child):
     """
     Use expect to send commands to set some prefs on the drone
     """
-    command_list = ['alias ls=\'ls -F\'', "alias ll='ls -l'"]
+    command_list = ['alias ls=\'ls -F\'', "alias ll='ls -l'", "alias systemctl='systemctl --no-pager'", "cd /data/teal",
+                    "alias pst='ps | grep teal'"]
     cmd_error = 'try again'
     did_something = False
     for cmd in command_list:
@@ -152,7 +153,11 @@ def main(opts, args):
     # vars
     lin, col = os.popen('stty size', 'r').read().split()
     # resize_command="COLUMNS=" + col + ";LINES=" + lin + ";export COLUMNS LINES;\n"
-    host = args[0]
+
+    if "-q" in opts:
+        host = "192.168.168.222"
+    else:
+        host = args[0]
 
     user = 'root'
     #passwords = ['oelinux123', 'pw2', 'pw3']
@@ -189,15 +194,18 @@ def show_help():
     print("{} [opts] <host>".format("sshmk1.sh"))
     print("\t-h: Show help")
     print("\t-i: automatically move image dir")
+    print("\t-d: cd to specified directory")
+    print("\t-q: quickly use default ip address of 192.168.168.222")
 
 if __name__ == '__main__':
     try:
         opts = [opt for opt in sys.argv[1:] if opt.startswith("-")]
         args = [arg for arg in sys.argv[1:] if not arg.startswith("-")]
 
-        if len(args) < 1 or "-h" in opts:
-            show_help()
-            sys.exit(1)
+        if len(args) < 1:
+            if "-h" in opts or "-q" not in opts:
+                show_help()
+                sys.exit(1)
 
         main(opts, args)
 
