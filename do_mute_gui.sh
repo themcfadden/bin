@@ -71,7 +71,7 @@ function unmute()
 DELAY_PERIOD=60
 while true
 do
-      DELAY_PERIOD=$(zenity --entry --text=Mute Audio --entry-text=$DELAY_PERIOD)
+      DELAY_PERIOD=$(zenity --entry --text="Mute Audio Duration" --entry-text=$DELAY_PERIOD)
 
       if [[ -z "$DELAY_PERIOD" ]]; then break; fi
 
@@ -92,3 +92,4 @@ do
       # Issue our unmute command
       unmute
 done
+
