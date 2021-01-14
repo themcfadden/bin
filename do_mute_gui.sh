@@ -5,10 +5,8 @@ function usage()
     cat <<HEREDOC
     Usage: $PROGRAM_NAME [NUM] [--delay NUM] [--help] 
     optional arguments:
-             NUM, -d, --delay NUM   Delay NUM seconds
-             -h, --help             Show this help message and exit
-
-    If no argument is specified, delay for 30 seconds.
+             -d, --persist  Run again, until cancel is hit
+             -h, --help     Show this help message and exit
 HEREDOC
 }
 
@@ -68,7 +66,37 @@ function unmute()
 
 }
 
+# Init script vars
+PROGRAM_NAME=$(basename $0)
 DELAY_PERIOD=60
+RUN_UNTIL_CANCEL=0
+POSITIONAL=()
+
+while [[ $# -gt 0 ]]
+      do
+          key="$1"
+
+          case $key in
+              -p|--persist)
+                  RUN_UNTIL_CANCEL=1
+                  shift # past argument
+                  #shift # past value
+                  ;;
+              -h|--help)
+                  usage; exit;
+                  shift # past argument
+                  #shift # past value
+                  ;;
+              *)
+                  POSITIONAL+=("$1")
+                  shift # past argument
+                  ;;
+          esac
+done
+
+set -- "${POSITIONAL[@]}" # restore positional params
+
+
 while true
 do
       DELAY_PERIOD=$(zenity --entry --text="Mute Audio Duration" --entry-text=$DELAY_PERIOD)
@@ -91,5 +119,7 @@ do
 
       # Issue our unmute command
       unmute
+
+      if [ $RUN_UNTIL_CANCEL -eq 0 ]; then break; fi
 done
 
