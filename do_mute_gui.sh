@@ -96,12 +96,18 @@ done
 
 set -- "${POSITIONAL[@]}" # restore positional params
 
-
 while true
 do
       DELAY_PERIOD=$(zenity --entry --text="Mute Audio Duration" --entry-text=$DELAY_PERIOD)
 
-      if [[ -z "$DELAY_PERIOD" ]]; then break; fi
+      # Check that is has a value
+      if [[ -z $DELAY_PERIOD ]]; then break; fi
+      # Check that the value is a number.
+      REGEX="^[0-9]+$"
+      if ! [[ $DELAY_PERIOD =~ $REGEX ]];
+      then
+          break;
+      fi
 
       # Issue our mute command
       mute
