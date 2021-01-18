@@ -2,12 +2,10 @@
 
 function usage()
 {
-    cat <<HEREDOC
-    Usage: $PROGRAM_NAME [NUM] [--delay NUM] [--help] 
-    optional arguments:
-             -d, --persist  Run again, until cancel is hit
-             -h, --help     Show this help message and exit
-HEREDOC
+    echo "Usage: $PROGRAM_NAME [NUM] [--delay NUM] [--help]"
+    echo "optional arguments:"
+    echo "   -d, --persist  Run again, until cancel is hit"
+    echo "   -h, --help     Show this help message and exit"
 }
 
 machine=Linux
@@ -84,8 +82,6 @@ while [[ $# -gt 0 ]]
                   ;;
               -h|--help)
                   usage; exit;
-                  shift # past argument
-                  #shift # past value
                   ;;
               *)
                   POSITIONAL+=("$1")
