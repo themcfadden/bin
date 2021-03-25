@@ -119,7 +119,7 @@ def ssh_command(ssh_command_string, passwords):
         if i == 0: # Timeout
             print('ERROR!')
             print('SSH could not login. Here is what SSH said:')
-            #print(child.before, child.after)
+            print(child.before, child.after)
             return None
         if i == 1: # SSH does not have the public key. Just accept it.
             print('Asking to accept public key')
