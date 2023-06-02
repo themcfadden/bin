@@ -49,6 +49,9 @@ Invoce reminders:
 - Declar pre-tasks
   @task(<name-of-invoke-task>)
 
+- Tab completion:
+  Add this to .zshrc
+  source <(invoke --print-completion-script zsh)
 
 """
 
