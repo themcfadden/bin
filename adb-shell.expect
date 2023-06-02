@@ -1,0 +1,17 @@
+#!/usr/bin/env expect -f
+
+set stty_cmd [lindex $argv];
+
+spawn adb wait-for-device
+expect "$"
+
+spawn adb shell
+expect "#"
+send "alias ls=\'ls -F\'\r"
+send "alias ll='ls -lF'\r"
+send "alias systemctl='systemctl --no-pager'\r"
+send "alias pst='ps | grep teal'\r"
+send "cd /home/root \r"
+send "$stty_cmd\r"
+
+interact

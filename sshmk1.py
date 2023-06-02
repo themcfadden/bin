@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Handy python script to facilitate quickly logging into various servers via ssh.
+ python script to facilitate quickly logging into various servers via ssh.
 """
 
 #import getpass
@@ -260,7 +260,7 @@ def main(opts, args):
     child.interact()
 
 def show_help():
-    print("{} [opts] <host>".format("sshmk1.sh"))
+    print("{} [opts] <host>".format("sshmk1.py"))
     print("\t-h: Show help")
     print("\t-i: automatically move image dir")
     print("\t-d: cd to specified directory")

@@ -13,3 +13,4 @@ ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 ssh.connect('192.168.1.222', port = 22, username = 'root', password = 'oelinux123') #connect to drone 
 ssh.exec_command('systemctl restart mavlink-router')
 ssh.close()
+
