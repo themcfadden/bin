@@ -49,7 +49,7 @@ function mute()
 
     os_is Linux &&
     {
-        amixer -q -D pulse sset Master mute
+        amixer -q sset Master mute
     }
 }
 
@@ -62,7 +62,7 @@ function unmute()
 
     os_is Linux &&
     {
-        amixer -q -D pulse sset Master unmute
+        amixer -q sset Master unmute
     }
 
 
