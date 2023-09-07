@@ -7,6 +7,11 @@ import time
 
 from io import StringIO
 
+HOME_PATH = os.environ['HOME']
+DRONE_DEFAULT_IP = "192.168.2.222"
+ESC_IMAGE_DIR = "/usr/local/tealflasher/images/"
+FMU_IMAGE_DIR = "/usr/local/tealflasher/images/"
+
 """
 Invoce reminders:
 - @task decorator to define an exported task
@@ -103,6 +108,165 @@ Invoce reminders:
 #    for line in lines:
 #        print("->", line)
 
+
+@task
+def set_gpio(ctx, gpio_pin_number, value):
+    child = _spawn_shell(ctx)
+    if child == None:
+        print("Error connecting to drone")
+        sys.exit()
+    gpio_string = "echo " + str(value) + " > /sys/class/gpio/gpio"+str(gpio_pin_number)+"/value"
+    print("Sending:", gpio_string)
+    child.sendline(gpio_string)
+
+@task
+def reset_esc(ctx, esc_number=0):
+    child = _spawn_shell(ctx)
+    if child == None:
+        print("Error connecting to drone")
+        sys.exit()
+
+    start_esc = 0
+    end_esc = 3
+    if esc_number < 1 or esc_number > 4:
+        print("\nresetting all escs")
+    else:
+        start_esc = esc_number - 1
+        end_esc = esc_number - 1
+
+    for esc in range(start_esc, end_esc + 1):
+        gpio_number = 70 + esc
+#        print("gpio:", gpio_number)
+        time.sleep(0.5)
+        child.sendline("echo 1 > /sys/class/gpio/gpio"+str(gpio_number)+"/value")
+        time.sleep(0.5)
+        child.sendline("echo 0 > /sys/class/gpio/gpio"+str(gpio_number)+"/value")
+
+#
+# Generic shell
+#
+@task
+def drone_shell(ctx):
+    """
+    Connect to a Teal drone, either via ADB or SSH
+    ADB is attempted first, the SSH
+    """
+
+    child = _get_drone_shell(ctx)
+    child.interact()
+
+def _get_drone_shell(ctx):
+    return _wait_for_and_connect_adb_or_ip(ctx)
+
+def _wait_for_and_connect_adb_or_ip(ctx):
+    iteration_count = 0
+    while True:
+        if _adb_is_present(ctx):
+            return _spawn_adb_shell(ctx, "")
+        elif _ip_is_present(ctx):
+            return _spawn_ssh_shell(ctx)
+        iteration_count += 1
+        if iteration_count == 3:
+            print("Waiting for ADB for SSH connection")
+
+def _adb_is_present(ctx):
+    try:
+        ctx.run('adb devices | grep "td" &> /dev/null')
+    except:
+        return False
+    return True
+
+
+def _ip_is_present(ctx, ip_address=DRONE_DEFAULT_IP):
+    response = os.system("ping -c 1 -t 1 " + ip_address + "&> /dev/null")
+    if response == 0:
+        return True
+
+    return False
+
+
+
+CONNECTION_TIMEOUT = 1
+CONNECTION_ADB = 2
+CONNECTION_SSH = 3
+@task
+def drone_upload_file(ctx, local_file, remote_file):
+    ip_address = DRONE_DEFAULT_IP
+    connection_type = _find_drone_connection(ctx)
+    if connection_type == CONNECTION_ADB:
+        print("\nDrone on ADB")
+        print("ADB local file \"{}\" to remote \"{}\"".format(local_file, remote_file))
+        ctx.run("adb push {} {}/".format(local_file, remote_file))
+    elif connection_type == CONNECTION_SSH:
+        print("\nDrone on SSH")
+        _scp(ctx, local_file, remote_file, ip_address)
+    else:
+        print("\nDrone connection timeout")
+
+
+@task
+def drone_upload_esc(ctx, image_file):
+    child = _spawn_shell(ctx)
+    if child != None:
+        print("cd to {}".format(ESC_IMAGE_DIR))
+        child.sendline("cd {}".format(ESC_IMAGE_DIR))
+        print("wait for prompt")
+        _wait_for_prompt_via_expect(ctx, child)
+        print("renaming old esc bin")
+        child.sendline('for x in foc_esc*bin; do mv "$x" _"$x"; done')
+        print("waiting for prompt")
+        _wait_for_prompt_via_expect(ctx, child)
+        print("sending file")
+        drone_upload_file(ctx, image_file, ESC_IMAGE_DIR)
+
+
+
+def _spawn_shell(ctx):
+    connection_type = _find_drone_connection(ctx)
+    if connection_type == CONNECTION_ADB:
+        return _spawn_adb_shell(ctx)
+    elif connection_type == CONNECTION_SSH:
+        return _spawn_ssh_shell(ctx)
+    else:
+        return None
+
+
+def _find_drone_connection(ctx, timeout_seconds = 20):
+    iteration_count = 0
+    try:
+        while True:
+            if _adb_is_present(ctx):
+                return CONNECTION_ADB
+            elif _ip_is_present(ctx):
+                return CONNECTION_SSH
+
+            iteration_count += 1
+
+            if iteration_count == 1:
+                print("Waiting for ADB for SSH connection  ", end="")
+            if iteration_count >= timeout_seconds:
+                return CONNECTION_TIMEOUT
+
+            time.sleep(1)
+            if iteration_count > 3:
+                _update_progress()
+    except KeyboardInterrupt:
+        sys.exit()
+
+def _update_progress():
+    progresses = ["/", "-", "\\", "|"]
+
+    sys.stdout.write("\b%s" % progresses[_update_progress.progress_index])
+    sys.stdout.flush()
+    _update_progress.progress_index += 1
+    if _update_progress.progress_index > 3:
+        _update_progress.progress_index = 0
+
+_update_progress.progress_index = 0
+
+
+#####################################################
+
 @task
 def px4_update_name(ctx, version_info, move_to_images=False):
     """
@@ -128,10 +292,10 @@ def px4_update_name(ctx, version_info, move_to_images=False):
     print("Dest name:", dest_file_name)
 
     print("copying ./build/teal_fmu-v5-mk1_default/teal_fmu-v5-mk1.bin to ./build/teal_fmu-v5-mk1_default/{}".format(dest_file_name))
-    ctx.run("cp ./build/teal_fmu-v5-mk1_default/teal_fmu-v5-mk1.bin ./build/teal_fmu-v5-mk1_default/{}".format(dest_file_name))
+    ctx.run("cp ./build/teal_fmu-v5-mk1_default/teal_fmu-v5-mk1_default.bin ./build/teal_fmu-v5-mk1_default/{}".format(dest_file_name))
 
     if move_to_images:
-        cmd = "cp ./build/teal_fmu-v5-mk1_default/{} /home/mattmc/MattMcFadden/3-Resources/px4-images/{}".format(dest_file_name, dest_file_name)
+        cmd = "cp ./build/teal_fmu-v5-mk1_default/{} {}/MattMcFadden/3-Resources/px4-images/{}".format(dest_file_name, HOME_PATH, dest_file_name)
         ctx.run(cmd)
         #print("cp ./build/teal_fmu-v5-mk1_default/{} /home/mattmc/MattMcFadden/3-Resources/px4-images/{}".format(dest_file_name, dest_file_name))
         print(cmd)
@@ -278,17 +442,57 @@ def adb_upload_fmu(ctx, image_file, adb_sn=""):
     child.interact()
 
 @task
-def mav_shell(ctx, ip_address="192.168.1.222"):
+def mav_shell(ctx, ip_address=DRONE_DEFAULT_IP):
     """
     call the python mavlink-shell.py script
     """
 
-    child = pexpect.spawn("/home/mattmc/util/mavlink_shell.py tcp:192.168.1.222:5760")
+    cmd = "/Users/mmcfadden/bin/mavlink_shell.py tcp:"+ip_address+":5760"
+
+    progresses = ["/", "-", "\\", "|"]
+    progress_index = 0
+    while not _ip_is_present(ctx, ip_address):
+        sys.stdout.write("\b%s" % progresses[progress_index])
+        sys.stdout.flush()
+        progress_index += 1
+        if progress_index > 3:
+            progress_index = 0
+        time.sleep(0.1)
+
+    print("\b", end="")
+    time.sleep(1)
+    child = pexpect.spawn(cmd)
     child.interact()
 
 
 @task
-def ssh_upload_fmu(ctx, image_file, ip_address="192.168.1.222" ):
+def mav_shell_arm(ctx, ip_address=DRONE_DEFAULT_IP):
+    """
+    call the python mavlink-shell.py script
+    """
+
+    cmd = "/Users/mmcfadden/bin/mavlink_shell.py tcp:"+ip_address+":5760"
+
+    progresses = ["/", "-", "\\", "|"]
+    progress_index = 0
+    while not _ip_is_present(ctx, ip_address):
+        sys.stdout.write("\b%s" % progresses[progress_index])
+        sys.stdout.flush()
+        progress_index += 1
+        if progress_index > 3:
+            progress_index = 0
+        time.sleep(0.1)
+
+    print("\b", end="")
+    time.sleep(1)
+    child = pexpect.spawn(cmd)
+    time.sleep(10)
+    child.sendline("commander arm")
+
+    child.interact()
+
+@task
+def ssh_upload_fmu(ctx, image_file, ip_address=DRONE_DEFAULT_IP):
     """
     Via an SSH connection, rename current version of FMU image to something the script won't recognize,
     upload new version.
@@ -311,11 +515,11 @@ def ssh_upload_fmu(ctx, image_file, ip_address="192.168.1.222" ):
         sys.exit(1)
 
 
-    IMAGE_DIR = "/usr/local/tealflasher/images"
+    IMAGE_DIR = "/usr/local/tealflasher/images/"
     SCRIPT_DIR = "/usr/local/tealflasher"
 
     print('spawning shell')
-    child = _ssh_shell(ctx, ip_address)
+    child = _spawn_ssh_shell(ctx, ip_address)
 
     #child = _spawn_adb_shell(ctx, adb_sn)
     print("cd to dir")
@@ -329,11 +533,22 @@ def ssh_upload_fmu(ctx, image_file, ip_address="192.168.1.222" ):
     print("scp new image")
     _scp(ctx, image_file, IMAGE_DIR, ip_address)
     #ctx.run("adb push {} {}/".format(image_file, IMAGE_DIR))
-    #ctx.run("scp -i ~/.ssh/mk1-ssh-dev {} root@{}/".format(image_file, IMAGE_DIR))
+    #ctx.run("scp -i ~/.ssh/mk1-ssh-dev {} root@{}:{}".format(image_file, ip_address,IMAGE_DIR))
     child.sendline('ls -l')
     child.sendline('cd ..')
     child.send('./tealflasher.sh fmu')
     child.interact()
+
+
+@task
+def ssh_watch_radio(ctx, ip_of_radio="192.168.168.1", ip_address=DRONE_DEFAULT_IP):
+    """
+    Watch radio via ssh
+    """
+
+    child = _spawn_ssh_shell(ctx, ip_address)
+    ip_watch_radio(ctx, ip_of_radio)
+
 
 @task
 def adb_gimbal_stop_shell(ctx, s=""):
@@ -412,31 +627,26 @@ def adb_uncomment_out_qgc_endpoint(ctx):
     ctx.run("adb shell {}".format(sed_uncomment_qgc_endpoint))
 
 @task
-def ssh_comment_out_qgc_endpoint(ctx, ip_address='192.168.1.222'):
+def ssh_comment_out_qgc_endpoint(ctx, ip_address=DRONE_DEFAULT_IP):
     """
     SSH comment out (disable) mavlink-router main.conf QGC Endpoint.
     """
-    import paramiko
-    ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    ssh.connect(ip_address, port = 22, username = 'root', password = 'oelinux123') #connect to drone
-    ssh.exec_command(sed_comment_qgc_endpoint)
-    ssh.close()
+    child = _spawn_ssh_shell(ctx, ip_address)
+    child.sendline(sed_comment_qgc_endpoint)
+    child.interact()
 
 @task
-def ssh_uncomment_out_qgc_endpoint(ctx, ip_address='192.168.1.222'):
+def ssh_uncomment_out_qgc_endpoint(ctx, ip_address=DRONE_DEFAULT_IP):
     """
     SSH uncomment (enable) mavlink-router main.confg QGC Endpoint.
     """
-    import paramiko
-    ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    ssh.connect(ip_address, port = 22, username = 'root', password = 'oelinux123') #connect to drone
-    ssh.exec_command(sed_uncomment_qgc_endpoint)
-    ssh.close()
+
+    child = _spawn_ssh_shell(ctx, ip_address)
+    child.sendline(sed_uncomment_qgc_endpoint)
+    child.interact()
 
 @task
-def ssh_log_while_armed(ctx, ip_address='192.168.1.222'):
+def ssh_log_while_armed(ctx, ip_address=DRONE_DEFAULT_IP):
     """
     SSH change logging to while armed
     """
@@ -449,7 +659,7 @@ def ssh_log_while_armed(ctx, ip_address='192.168.1.222'):
     ssh.close()
 
 @task
-def ssh_log_always(ctx, ip_address='192.168.1.222'):
+def ssh_log_always(ctx, ip_address=DRONE_DEFAULT_IP):
     """
     SSH change logging to always
     """
@@ -559,30 +769,30 @@ def adb_gimbal_screen(ctx, s=""):
 
 
 
-def _scp(ctx, src_file_path, target_file_path, ip_address="192.168.1.222"):
+def _scp(ctx, src_file_path, target_file_path, ip_address=DRONE_DEFAULT_IP):
     print("src:", src_file_path)
     print("trg:", target_file_path)
     print("ip:", ip_address)
 
-    print("sending scp cmd")
-    child = pexpect.spawn("scp -i ~/.ssh/mk1-ssh-dev {} root@{}:{} ".format(src_file_path, ip_address, target_file_path))
+    cmd = "scp -O -i ~/.ssh/mk1-ssh-dev {} root@{}:{} ".format(src_file_path, ip_address, target_file_path)
+    print("cmd:", cmd)
+    child = pexpect.spawn(cmd)
 
     while True:
         response = child.expect([pexpect.TIMEOUT, pexpect.EOF, '[#$]'])
-        print("==> got response:", response, child.before, child.after)
-
+        #print("==> got response:", response, child.before, child.after)
 
         if response == 0:
-            #for a in child.before:
-            #    print(a + "\n")
-
+            print("SCP TIMEOUT")
             return None
         elif response == 1:
+            print("SCP EOF")
             return None
         elif response == 2: #prompt
+            print("SCP PROMPT")
             return child
 
-def _ssh_shell(ctx, ip_address="192.168.1.222"):
+def _spawn_ssh_shell(ctx, ip_address=DRONE_DEFAULT_IP):
     """
     SSH Shell.
     """
@@ -595,8 +805,9 @@ def _ssh_shell(ctx, ip_address="192.168.1.222"):
 
     new_key = 'Are you sure you want to continue connecting'
     host_id_changed = 'HOST IDENTIFICATION HAS CHANGED'
-    ssh_keygen = 'ssh-keygen -f "/home/mattmc/.ssh/known_hosts" -R "192.168.1.222"'
-    child = pexpect.spawn("ssh root@{} -i /home/mattmc/.ssh/mk1-ssh-dev".format(ip_address))
+    ssh_keygen = 'ssh-keygen -f "{}/.ssh/known_hosts" -R {}'.format(HOME_PATH, ip_address)
+    ssh_cmd = 'ssh root@{} -i {}/.ssh/mk1-ssh-dev'.format(ip_address, HOME_PATH)
+    child = pexpect.spawn(ssh_cmd)
     x = 0
     while True:
         response = child.expect([pexpect.TIMEOUT, pexpect.EOF, '[#$]', new_key, 'password:', host_id_changed])
@@ -610,7 +821,7 @@ def _ssh_shell(ctx, ip_address="192.168.1.222"):
             break
         elif response == 2: #prompt
             #print("-->got prompt")
-            #_send_alias_commands(child)
+            _set_environment(child)
             print(child.before.decode() + child.after.decode(), end='')
             break
         elif response == 3: # new key
@@ -625,29 +836,30 @@ def _ssh_shell(ctx, ip_address="192.168.1.222"):
             #resp = child.expect([pexpect.TIMEOUT, '[#$]'])
         elif response == 5: # host id changed
             #print("-->got HOST CHANGED in _ssh_shell")
-            print(child.before, child.after)
-            print("sending ssh-keygen")
+            #print(child.before, child.after)
+            #print("sending ssh-keygen")
             ssh_clear_keys(ctx, ip_address)
-            child = pexpect.spawn("ssh root@{} -i /home/mattmc/.ssh/mk1-ssh-dev".format(ip_address))
+            child = pexpect.spawn("ssh root@{} -i {}/.ssh/mk1-ssh-dev".format(ip_address, HOME_PATH))
         else:
+            #print("-->break")
             break
 
     return child
 
 @task(help={'ip_address':"IP address of drone"})
-def ssh_shell(ctx, ip_address="192.168.1.222"):
+def ssh_shell(ctx, ip_address=DRONE_DEFAULT_IP):
 
-    child = _ssh_shell(ctx, ip_address)
-    _send_alias_commands(child)
-    _set_stty(child)
+    child = _spawn_ssh_shell(ctx, ip_address)
+    #_send_alias_commands(child)
+    #_set_stty(child)
     child.interact()
 
 @task
-def ssh_enable_adb(ctx, ip_address='192.168.1.222'):
+def ssh_enable_adb(ctx, ip_address=DRONE_DEFAULT_IP):
     """
     SSH with mk1-ssh-dev key, enable adb
     """
-    child = _ssh_shell(ctx, ip_address)
+    child = _spawn_ssh_shell(ctx, ip_address)
     print("sending {}".format(sed_enable_start_adbd))
     child.sendline(sed_enable_start_adbd)
     while True:
@@ -675,11 +887,11 @@ def ssh_enable_adb(ctx, ip_address='192.168.1.222'):
 
 
 @task
-def ssh_disable_adb(ctx, ip_address='192.168.1.222'):
+def ssh_disable_adb(ctx, ip_address=DRONE_DEFAULT_IP):
     """
     SSH with mk1-ssh-dev key, enable adb
     """
-    child = _ssh_shell(ctx, ip_address)
+    child = _spawn_ssh_shell(ctx, ip_address)
     print("sending {}".format(sed_disable_start_adbd))
     child.sendline(sed_disable_start_adbd)
     while True:
@@ -792,7 +1004,7 @@ def adb_radio_status(ctx, ip_of_radio='192.168.168.1'):
 @task
 def ip_watch_radio(ctx, ip_of_radio='192.168.168.2'):
     """
-    telnet to loop on AT+MWSTATUS
+    telnet loop on AT+MWSTATUS
     """
     child = None
     while child is None:
@@ -842,7 +1054,6 @@ def adb_radio_off(ctx, ip_of_radio='192.168.168.1'):
     child = None
     tries = 5;
     while True:
-        #child = pexpect.spawn("adb shell 'telnet 192.168.168.1'")
         child = pexpect.spawn("adb shell 'telnet {}'".format(ip_of_radio))
         if child is None:
             print("Child is None")
@@ -906,23 +1117,17 @@ def adb_cmd(ctx, cmds):
 
 
 @task
-def ssh_reset_mavlink_router(ctx, ip_address='192.168.1.222'):
+def ssh_reset_mavlink_router(ctx, ip_address=DRONE_DEFAULT_IP):
     """
     SSH systemctl restart mavlink-router.
     """
-    child = _ssh_shell(ctx, ip_address)
+    child = _spawn_ssh_shell(ctx, ip_address)
     child.sendline('systemctl restart mavlink-router')
     _wait_for_prompt_via_expect(ctx, child)
 
-#    import paramiko
-#    ssh = paramiko.SSHClient()
-#    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-#    ssh.connect(ip_address, port = 22, username = 'root', password = 'oelinux123') #connect to drone
-#    ssh.exec_command('systemctl restart mavlink-router')
-#    ssh.close()
 
 @task
-def ssh_clear_keys(ctx, host='192.168.1.222'):
+def ssh_clear_keys(ctx, host=DRONE_DEFAULT_IP):
     """
     Remove SSH known_hosts entry for IP address.
     """
@@ -1424,7 +1629,7 @@ def print_radio_status(event, message_text, position_cursor_before=True):
 #
 #
 #
-def _spawn_adb_shell(ctx, s):
+def _spawn_adb_shell(ctx, s=""):
     cmd_str = add_adb_serial_number_param("wait-for-device", s)
     shell_str = add_adb_serial_number_param("shell", s)
 
@@ -1439,8 +1644,9 @@ def _spawn_adb_shell(ctx, s):
         else:
             break
 
-    _send_alias_commands(child)
-    _set_stty(child)
+    #_send_alias_commands(child)
+    #_set_stty(child)
+    _set_environment(child)
 
     return child
 
@@ -1457,6 +1663,10 @@ def _send_alias_commands(child):
                ]
     for c in commands:
         child.sendline(c)
+
+def _set_environment(child):
+    _send_alias_commands(child)
+    _set_stty(child)
 
 
 def _wait_for_prompt_adb_shell(ctx, child):
@@ -1487,9 +1697,12 @@ def _wait_for_prompt_via_expect(ctx, child):
 
 sed_comment_log_always        = "sed -i '5s/^#*/#/' /data/teal/mavlink-router/logger.conf"
 sed_comment_log_while_armed   = "sed -i '6s/^#*/#/' /data/teal/mavlink-router/logger.conf"
-sed_comment_qgc_endpoint      = "sed -i '34,37s/^#*/#/' /data/teal/mavlink-router/main.conf"
+#sed_comment_qgc_endpoint      = "sed -i '34,37s/^#*/#/' /data/teal/mavlink-router/main.conf"
 sed_uncomment_log_always      = "sed -i '5s/^#*//' /data/teal/mavlink-router/logger.conf"
 sed_uncomment_log_while_armed = "sed -i '6s/^#*//' /data/teal/mavlink-router/logger.conf"
-sed_uncomment_qgc_endpoint    = "sed -i '34,37s/^#*//' /data/teal/mavlink-router/main.conf"
+#sed_uncomment_qgc_endpoint    = "sed -i '34,37s/^#*//' /data/teal/mavlink-router/main.conf"
+sed_uncomment_qgc_endpoit     = "sed -i '/qgc/ s/^#*// ; ns/^#*// ; ns/^#*// ; ns/^#*//' /data/teal/mavalink-router/main.conf"
+sed_comment_qgc_endpoint      = "sed -i '/qgc/ s/^#*/#/' /data/teal/mavlink-router/main.conf"
+
 sed_enable_start_adbd         = "sed -i 's/^START_ADBD=0/START_ADBD=1/' /etc/default/adbd"
 sed_disable_start_adbd        = "sed -i 's/^START_ADBD=1/START_ADBD=0/' /etc/default/adbd"
