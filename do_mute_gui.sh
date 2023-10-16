@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
 
 function usage()
 {
@@ -62,6 +62,14 @@ function unmute()
     }
 
 
+}
+
+modify_win_by_pid() {
+    pid=$1
+
+    sleep 0.2
+    win_id=`wmctrl -l -p | grep ${pid} | awk '{print $1}'`
+    wmctrl -i - ${win_id} -b add,above
 }
 
 # Init script vars
