@@ -300,6 +300,34 @@ def px4_update_name(ctx, version_info, move_to_images=False):
         #print("cp ./build/teal_fmu-v5-mk1_default/{} /home/mattmc/MattMcFadden/3-Resources/px4-images/{}".format(dest_file_name, dest_file_name))
         print(cmd)
 
+
+@task
+def px4_release_rename(ctx, version_info, move_to_images=False):
+    """
+    Copy px4 default build files with the version appended to the name
+
+    Args:
+        postfix_name (string): version info to append to string
+        -m to move to reference dir
+
+    Example: inv px4-update-name 1.9.13-01 -m
+    """
+
+    base_name = "teal_fmu-v6x-mk2*"
+    #cmd_str = 'cd build/' + base_name + '* ; for file in ' + base_name + '* ; do echo mv "${file}" "${file//default/v' + version_info + '}" ; done ; ls ' + base_name
+    cmd_str = 'cd build/' + base_name + '* ; for file in ' + base_name + '* ; do mv "${file}" "${file//default/v' + version_info + '}" ; done ; ls ' + base_name
+
+
+    ctx.run(cmd_str)
+
+    if move_to_images:
+        print("Not implemented yet")
+        #cmd = "cp ./build/teal_fmu*/{} {}/MattMcFadden/3-Resources/px4-images/{}".format(dest_file_name, HOME_PATH, dest_file_name)
+        #ctx.run(cmd)
+        ##print("cp ./build/teal_fmu-v5-mk1_default/{} /home/mattmc/MattMcFadden/3-Resources/px4-images/{}".format(dest_file_name, dest_file_name))
+        #print(cmd)
+
+
 @task
 def px4_release(ctx):
     """Step through process for releasing a px4 image to teal-mk1-build"""
@@ -1632,6 +1660,8 @@ def print_radio_status(event, message_text, position_cursor_before=True):
 def _spawn_adb_shell(ctx, s=""):
     cmd_str = add_adb_serial_number_param("wait-for-device", s)
     shell_str = add_adb_serial_number_param("shell", s)
+
+    ctx.run("adb root")
 
     ctx.run(cmd_str)
     child = pexpect.spawn(shell_str)
